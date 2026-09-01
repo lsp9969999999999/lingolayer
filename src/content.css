@@ -1,0 +1,137 @@
+/* LingoLayer - 译文与浮层样式 */
+
+/* ------------------------------------------------------------ 译文本体 */
+
+.dsx-translation {
+  display: block;
+  margin: 3px 0 1px;
+  color: inherit;
+  font-family: inherit;
+  font-size: 92%;              /* 比原文小一号，不喧宾夺主 */
+  line-height: 1.55;
+  font-weight: inherit;
+  text-align: inherit;
+  white-space: normal;
+  word-break: break-word;
+  opacity: 0.94;
+  overflow-anchor: none;       /* 不参与浏览器滚动锚定，交给脚本统一补偿 */
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.dsx-translation.dsx-inline {
+  display: inline;
+  margin: 0 0 0 4px;
+}
+
+/* 译文出现时轻微淡入，避免生硬跳变 */
+.dsx-translation.dsx-done {
+  animation: dsx-fade-in 0.18s ease-out;
+}
+
+/* ---- 样式主题（保持克制，不改变行高与版面） ---- */
+
+.dsx-translation.dsx-style-dashed {
+  border-bottom: 1px dashed rgba(77, 107, 254, 0.45);
+  padding-bottom: 1px;
+}
+
+.dsx-translation.dsx-style-underline {
+  text-decoration: underline;
+  text-decoration-color: rgba(77, 107, 254, 0.5);
+  text-underline-offset: 3px;
+}
+
+.dsx-translation.dsx-style-highlight {
+  background: rgba(77, 107, 254, 0.07);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.dsx-translation.dsx-style-quote {
+  border-left: 2px solid rgba(77, 107, 254, 0.5);
+  padding-left: 8px;
+}
+
+.dsx-translation.dsx-style-plain { /* 无装饰 */ }
+
+/* ------------------------------------------------- 加载态：极简占位条 */
+
+/*
+ * 关键设计：不写"翻译中"文字，只留一条低对比度占位条，
+ * 且延迟 0.45s 才淡入 —— 响应快时用户完全看不到，网络慢时也只是一条细条，
+ * 不会出现满屏"翻译中…"。
+ */
+.dsx-translation.dsx-loading {
+  display: block;
+  width: 64px;
+  height: 3px;                 /* 极细占位条：几乎不占版面，插入/替换时位移最小 */
+  margin: 4px 0 3px;
+  border-radius: 2px;
+  border: 0 !important;
+  padding: 0 !important;
+  text-decoration: none !important;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(77, 107, 254, 0.14) 25%,
+    rgba(77, 107, 254, 0.26) 37%,
+    rgba(77, 107, 254, 0.14) 63%
+  );
+  background-size: 400% 100%;
+  /* 延迟 0.6s 才淡入：接口响应快时用户完全看不到任何加载痕迹 */
+  animation: dsx-fade-in 0.3s ease-out 0.6s forwards,
+             dsx-shimmer 1.3s ease-in-out 0.6s infinite;
+}
+
+.dsx-translation.dsx-inline.dsx-loading {
+  display: none;
+}
+
+.dsx-translation.dsx-error {
+  display: inline-block;
+  color: #c5372c !important;
+  background: none !important;
+  border: 0 !important;
+  text-decoration: none !important;
+  font-size: 85%;
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+@keyframes dsx-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@keyframes dsx-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 尊重系统的"减少动效"偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .dsx-translation.dsx-loading { animation: dsx-fade-in 0.01s linear 0.6s forwards; }
+  .dsx-translation.dsx-done { animation: none; }
+}
+
+/* ------------------------------------------------- 划词翻译（内嵌呈现） */
+
+/* 与整页翻译同样的呈现方式，只是首次出现时轻微高亮一下，便于定位 */
+.dsx-translation.dsx-selection {
+  animation: dsx-fade-in 0.18s ease-out, dsx-flash 1.2s ease-out;
+}
+
+@keyframes dsx-flash {
+  0% { background-color: rgba(77, 107, 254, 0.16); }
+  100% { background-color: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsx-translation.dsx-selection { animation: none; }
+}
+
+@media print {
+  .dsx-translation.dsx-loading,
+  .dsx-translation.dsx-error { display: none !important; }
+}
