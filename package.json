@@ -1,0 +1,11 @@
+{
+  "name": "dsx-tests",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node content.test.js && node background.test.js && node mode.test.js && node features.test.js && node demo.test.js && node performance.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

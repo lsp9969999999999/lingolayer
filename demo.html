@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>深译 Deepread · 操作演示</title>
+<link rel="stylesheet" href="content.css" />
+<link rel="stylesheet" href="demo.css" />
+</head>
+<body>
+
+<header class="hero notranslate" translate="no">
+  <div class="hero-in">
+    <div class="brand"><span class="logo">D</span> 深译 <span class="en">Deepread</span></div>
+    <p class="slogan">网页双语对照翻译演示 —— 下面这页就是真实网页，直接在这里试。</p>
+    <div class="status" id="keyStatus">正在检查配置…</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ 引导操作 ============ -->
+  <section class="guide notranslate" translate="no">
+    <h2 class="sec-title">跟着做，三步上手</h2>
+
+    <div class="steps">
+      <div class="step" id="step1">
+        <div class="num">1</div>
+        <div class="body">
+          <h3>配置 API Key</h3>
+          <p>在设置页填入 DeepSeek API Key 并测试连接，这是翻译能工作的前提。</p>
+          <button class="btn" id="openOptions">打开设置页</button>
+        </div>
+      </div>
+
+      <div class="step" id="step2">
+        <div class="num">2</div>
+        <div class="body">
+          <h3>翻译整页</h3>
+          <p>点下面的按钮翻译本页示例内容，译文会插在每段原文下方，原文完整保留。在真实网页上，点扩展图标或按 <kbd>Alt</kbd>+<kbd>T</kbd> 即可。</p>
+          <button class="btn primary" id="btnTranslate">翻译本页</button>
+          <button class="btn" id="btnRestore">恢复原文</button>
+          <span class="live" id="liveStat"></span>
+        </div>
+      </div>
+
+      <div class="step" id="step3">
+        <div class="num">3</div>
+        <div class="body">
+          <h3>只翻译选中的一句</h3>
+          <p>用鼠标选中下方示例里的任意一句话，然后点这个按钮。译文会嵌入到那句话所在段落的下方。真实网页上可以右键选择「翻译选中内容」或按 <kbd>Alt</kbd>+<kbd>S</kbd>。</p>
+          <button class="btn primary" id="btnSelection">翻译我选中的文字</button>
+          <span class="live" id="selHint"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tuning">
+      <div class="tune">
+        <label for="styleSel">译文样式</label>
+        <select id="styleSel">
+          <option value="dashed">下划虚线</option>
+          <option value="underline">下划实线</option>
+          <option value="highlight">浅色背景</option>
+          <option value="quote">左侧竖线</option>
+          <option value="plain">无装饰</option>
+        </select>
+      </div>
+      <div class="tune">
+        <label for="scaleRange">译文字号 <b id="scaleVal">92</b>%</label>
+        <input type="range" id="scaleRange" min="70" max="130" step="2" />
+      </div>
+      <p class="tip">调整后立即作用于本页已有译文。</p>
+    </div>
+  </section>
+
+  <!-- ============ 示例正文 ============ -->
+  <section class="sample">
+    <h2 class="sec-title notranslate" translate="no">示例正文：任意语言 → 中文</h2>
+
+    <article>
+      <h3>The Quiet Revolution in Everyday Software</h3>
+      <p>For most of the past decade, software improved in ways users could see: brighter interfaces, faster page loads, smoother animations. The changes arriving now are harder to notice but more consequential, because they alter what the software understands rather than how it looks.</p>
+      <p>Translation is a good example. A tool that merely swaps words produces text that is technically correct and practically unreadable. A tool that grasps context can keep the original meaning, tone, and rhythm intact, which is the difference between decoding a sentence and actually reading it.</p>
+      <blockquote>The best interface is the one that disappears once you stop noticing it.</blockquote>
+
+      <h3>Un exemple en français</h3>
+      <p>La lecture bilingue permet de comparer immédiatement le texte original et sa traduction, ce qui est particulièrement utile pour apprendre une langue étrangère.</p>
+
+      <h3>日本語の例</h3>
+      <p>この拡張機能は、ページ上の文章を自動的に判別して翻訳します。原文はそのまま残るため、対訳として読むことができます。</p>
+
+      <h3 class="notranslate" translate="no">已经是中文的内容会被自动跳过</h3>
+      <p>这一段本来就是中文，插件会识别出来并直接跳过，既不浪费 token，也不会出现「中文翻译成中文」的尴尬结果。</p>
+    </article>
+  </section>
+
+  <!-- ============ 智能跳过展示 ============ -->
+  <section class="sample">
+    <h2 class="sec-title notranslate" translate="no">智能跳过：技术内容不会被翻译</h2>
+    <p class="lead-en">The following blocks stay untouched even when the whole page is translated, because they are code, commands, or file names.</p>
+
+    <pre><code>export function createTranslator(options) {
+  const { apiKey, target = 'zh-CN' } = options;
+  return async (text) => translate(text, apiKey, target);
+}</code></pre>
+
+    <p class="mono">$ npm install deepread --save-dev</p>
+    <p class="mono">docker run -p 8080:80 nginx:latest</p>
+
+    <table class="files">
+      <thead>
+        <tr><th class="notranslate" translate="no">文件</th><th class="notranslate" translate="no">说明（这一列会被翻译）</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">README.md</td><td>Project overview and installation instructions.</td></tr>
+        <tr><td class="mono">src/index.ts</td><td>Application entry point that wires everything together.</td></tr>
+        <tr><td class="mono">package.json</td><td>Dependency manifest and build scripts.</td></tr>
+      </tbody>
+    </table>
+
+    <p class="mono">getUserProfile · MAX_RETRY_COUNT · --verbose · v2.14.0</p>
+    <p class="note notranslate" translate="no">上面这些标识符、常量、命令行参数与版本号都会被自动识别并跳过。如果某个页面确实需要翻译代码注释，可以在设置页关掉「智能跳过代码」。</p>
+  </section>
+
+  <footer class="notranslate" translate="no">
+    <p>深译 Deepread · 全部翻译由你自己配置的 DeepSeek API 完成，原文与译文都不会发送到任何第三方。</p>
+  </footer>
+</main>
+
+<script src="content.js"></script>
+<script src="demo.js"></script>
+</body>
+</html>
