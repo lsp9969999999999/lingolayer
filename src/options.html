@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>LingoLayer - 设置</title>
+<link rel="stylesheet" href="options.css" />
+</head>
+<body>
+<main>
+  <h1><span class="logo">L</span> LingoLayer · 设置</h1>
+  <p class="lead">基于 DeepSeek 的网页双语对照翻译。默认<b>手动启用</b>：点击扩展图标或按 <kbd>Alt+T</kbd> 翻译整页；选中文字后右键或按 <kbd>Alt+S</kbd> 只翻译选中内容。
+    <a href="demo.html" target="_blank" rel="noreferrer">打开操作演示页 →</a></p>
+
+  <section>
+    <h2>API 设置</h2>
+    <div class="field">
+      <label for="apiKey">DeepSeek API Key <span class="req">*</span></label>
+      <div class="inline">
+        <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off" />
+        <button id="eye" class="ghost" type="button">显示</button>
+      </div>
+      <p class="hint">在 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">platform.deepseek.com</a> 创建。密钥仅保存在本机浏览器中，不会上传到任何第三方。</p>
+    </div>
+    <div class="field">
+      <label for="endpoint">API 地址</label>
+      <input type="text" id="endpoint" placeholder="https://api.deepseek.com" />
+      <p class="hint">默认 https://api.deepseek.com ，可改为兼容 OpenAI 协议的代理地址。</p>
+    </div>
+    <div class="field">
+      <label for="model">模型</label>
+      <select id="model">
+        <option value="deepseek-v4-flash">deepseek-v4-flash（推荐：快、便宜）</option>
+        <option value="deepseek-v4-pro">deepseek-v4-pro（质量更高、价格更贵）</option>
+        <option value="deepseek-chat">deepseek-chat（旧版别名）</option>
+      </select>
+      <p class="hint">翻译场景推荐 deepseek-v4-flash，速度快、成本低。</p>
+    </div>
+    <div class="field">
+      <button id="test" class="primary" type="button">测试连接</button>
+      <span id="testResult" class="result"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>翻译行为</h2>
+    <div class="field">
+      <label for="targetLang">目标语言</label>
+      <select id="targetLang">
+        <option>中文（简体）</option>
+        <option>中文（繁體）</option>
+        <option>English</option>
+        <option>日本語</option>
+        <option>한국어</option>
+      </select>
+      <p class="hint">源语言自动识别，任意语言都会被翻译为目标语言；已是目标语言的段落会自动跳过。</p>
+    </div>
+    <div class="field">
+      <label for="autoMode">自动翻译范围</label>
+      <select id="autoMode">
+        <option value="off">手动启用（默认）— 点图标或 Alt+T 才翻译</option>
+        <option value="allowlist">仅白名单网站自动翻译</option>
+        <option value="all">所有网站自动翻译（黑名单除外）</option>
+      </select>
+      <p class="hint">默认手动：不会在你没要求时消耗任何 token。若某些网站希望打开即翻译，选择「仅白名单」并把域名填进下方白名单。</p>
+    </div>
+    <div class="field two">
+      <div>
+        <label for="allowlist">白名单域名（每行一个）</label>
+        <textarea id="allowlist" rows="5" placeholder="example.com"></textarea>
+      </div>
+      <div>
+        <label for="blocklist">黑名单域名（每行一个）</label>
+        <textarea id="blocklist" rows="5" placeholder="mail.google.com"></textarea>
+      </div>
+    </div>
+    <div class="field check">
+      <label><input type="checkbox" id="onlyVisible" /> 仅翻译进入视口的内容（省 token，推荐）</label>
+      <label><input type="checkbox" id="cacheEnabled" /> 启用本地翻译缓存</label>
+      <label><input type="checkbox" id="showLoading" /> 显示"翻译中…"占位</label>
+      <label><input type="checkbox" id="skipCode" /> 智能跳过代码、命令行、文件名（技术文档 / 代码仓库强烈建议开启）</label>
+      <label><input type="checkbox" id="thinkingMode" /> 深度思考模式（质量略高，但明显更慢更贵，通常不需要）</label>
+    </div>
+  </section>
+
+  <section>
+    <h2>显示样式</h2>
+    <div class="field">
+      <label for="style">译文样式</label>
+      <select id="style">
+        <option value="dashed">下划虚线</option>
+        <option value="underline">下划实线</option>
+        <option value="highlight">浅色背景</option>
+        <option value="quote">左侧竖线</option>
+        <option value="plain">无装饰</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="fontScale">译文字号：<b id="fontScaleVal">92</b>%（相对原文，默认小一号）</label>
+      <input type="range" id="fontScale" min="70" max="130" step="5" />
+    </div>
+    <div class="preview">
+      <div class="pv-src">The quick brown fox jumps over the lazy dog.</div>
+      <div class="pv-dst" id="preview">敏捷的棕色狐狸跳过了那只懒狗。</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>性能与用量</h2>
+    <div class="field two">
+      <div>
+        <label for="batchSize">每次请求段落数：<b id="batchSizeVal">12</b></label>
+        <input type="range" id="batchSize" min="1" max="30" step="1" />
+      </div>
+      <div>
+        <label for="concurrency">并发请求数：<b id="concurrencyVal">3</b></label>
+        <input type="range" id="concurrency" min="1" max="8" step="1" />
+      </div>
+    </div>
+    <div class="field">
+      <label for="batchChars">每次请求最大字符数：<b id="batchCharsVal">2400</b></label>
+      <input type="range" id="batchChars" min="500" max="6000" step="100" />
+    </div>
+    <div class="field">
+      <button id="clearCache" class="ghost" type="button">清空翻译缓存</button>
+      <span id="cacheInfo" class="result"></span>
+    </div>
+  </section>
+
+  <div class="save-bar">
+    <button id="save" class="primary" type="button">保存设置</button>
+    <span id="saveResult" class="result"></span>
+  </div>
+
+  <section class="about">
+    <h2>关于 LingoLayer</h2>
+    <p class="hint">作者：lenny · 版权归作者所有。</p>
+    <p class="hint">问题反馈或功能需求，请前往 <a href="https://github.com/lsp9969999999999/lingolayer/issues" target="_blank" rel="noopener">GitHub Issues</a> 留言；其他联系：417429682@qq.com</p>
+  </section>
+</main>
+<script src="options.js"></script>
+</body>
+</html>
