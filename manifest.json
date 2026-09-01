@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "深译 Deepread",
+  "name": "LingoLayer",
   "version": "1.0.0",
-  "description": "基于 DeepSeek 的网页双语对照翻译：一键翻译任意语言网页，译文与原文对照显示，原文完整保留。",
+  "description": "Bilingual web translation with the original text preserved, powered by your own translation API key.",
   "minimum_chrome_version": "102",
   "permissions": [
     "storage",
@@ -33,7 +33,7 @@
     }
   ],
   "action": {
-    "default_title": "深译 Deepread - 双语对照翻译",
+    "default_title": "LingoLayer - Bilingual Web Translator",
     "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
