@@ -32,4 +32,4 @@ Deepread processes webpage text and sends it to the translation endpoint selecte
 ## Support
 
 Support: 417429682@qq.com
-Privacy policy: [PRIVACY_POLICY_URL]
+Privacy policy: https://lsp9969999999999.github.io/lingolayer/privacy-policy.html
