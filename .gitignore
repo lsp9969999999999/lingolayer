@@ -1,0 +1,8 @@
+node_modules/
+test/node_modules/
+test/chrome-profile/
+.playwright-cli/
+release-staging-*/
+dist/
+*.zip
+*.log
