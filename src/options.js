@@ -2,13 +2,13 @@
 
 const DEFAULTS = {
   apiKey: '', endpoint: 'https://api.deepseek.com', model: 'deepseek-v4-flash', thinkingMode: false,
-  targetLang: '中文（简体）', autoMode: 'off', allowlist: [], blocklist: [],
+  targetLang: 'Chinese (Simplified)', customTargetLang: '', autoMode: 'off', allowlist: [], blocklist: [], replaceModeSites: [],
   style: 'dashed', showLoading: true, batchSize: 10, batchChars: 2000,
   concurrency: 5, onlyVisible: true, cacheEnabled: true, fontScale: 92, skipCode: true
 };
 
 const $ = (id) => document.getElementById(id);
-const TEXTS = ['apiKey', 'endpoint', 'model', 'targetLang', 'autoMode', 'style'];
+const TEXTS = ['apiKey', 'endpoint', 'model', 'targetLang', 'customTargetLang', 'autoMode', 'style'];
 const CHECKS = ['showLoading', 'onlyVisible', 'cacheEnabled', 'thinkingMode', 'skipCode'];
 const RANGES = ['batchSize', 'batchChars', 'concurrency', 'fontScale'];
 
@@ -17,6 +17,15 @@ function linesToList(v) {
     .split(/[\n,]/)
     .map((s) => s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
     .filter(Boolean);
+}
+
+function normalizeTargetLang(value) {
+  const legacy = {
+    '中文（简体）': 'Chinese (Simplified)',
+    '中文（繁體）': 'Chinese (Traditional)',
+    '中文（繁体）': 'Chinese (Traditional)'
+  };
+  return legacy[String(value || '').trim()] || String(value || '').trim() || DEFAULTS.targetLang;
 }
 
 function syncRangeLabels() {
@@ -31,11 +40,13 @@ function syncRangeLabels() {
 
 async function load() {
   const s = Object.assign({}, DEFAULTS, await chrome.storage.local.get(Object.keys(DEFAULTS)));
+  s.targetLang = normalizeTargetLang(s.targetLang);
   for (const id of TEXTS) $(id).value = s[id];
   for (const id of CHECKS) $(id).checked = !!s[id];
   for (const id of RANGES) $(id).value = s[id];
   $('allowlist').value = (s.allowlist || []).join('\n');
   $('blocklist').value = (s.blocklist || []).join('\n');
+  $('replaceModeSites').value = (s.replaceModeSites || []).join('\n');
   syncRangeLabels();
   refreshCacheInfo();
 }
@@ -47,9 +58,10 @@ async function save() {
   for (const id of RANGES) patch[id] = Number($(id).value);
   patch.allowlist = linesToList($('allowlist').value);
   patch.blocklist = linesToList($('blocklist').value);
+  patch.replaceModeSites = linesToList($('replaceModeSites').value);
   if (patch.endpoint === '') patch.endpoint = DEFAULTS.endpoint;
   await chrome.storage.local.set(patch);
-  flash($('saveResult'), '已保存 ✓', 'ok');
+  flash($('saveResult'), 'Saved ✓', 'ok');
 }
 
 function flash(el, msg, cls) {
@@ -61,7 +73,7 @@ function flash(el, msg, cls) {
 async function refreshCacheInfo() {
   chrome.runtime.sendMessage({ type: 'DSX_CACHE_INFO' }, (r) => {
     if (chrome.runtime.lastError || !r) return;
-    $('cacheInfo').textContent = '当前缓存 ' + r.size + ' 条';
+    $('cacheInfo').textContent = r.size + ' cached translations';
   });
 }
 
@@ -71,12 +83,12 @@ $('eye').addEventListener('click', () => {
   const el = $('apiKey');
   const show = el.type === 'password';
   el.type = show ? 'text' : 'password';
-  $('eye').textContent = show ? '隐藏' : '显示';
+  $('eye').textContent = show ? 'Hide' : 'Show';
 });
 
 $('test').addEventListener('click', async () => {
   const res = $('testResult');
-  res.textContent = '测试中…';
+  res.textContent = 'Testing…';
   res.className = 'result';
   await save();
   chrome.runtime.sendMessage({
@@ -90,17 +102,17 @@ $('test').addEventListener('click', async () => {
     }
   }, (r) => {
     if (chrome.runtime.lastError) {
-      flash(res, '失败：' + chrome.runtime.lastError.message, 'err');
+      flash(res, 'Failed: ' + chrome.runtime.lastError.message, 'err');
       return;
     }
-    if (r && r.ok) flash(res, '连接成功，译文示例：' + r.message, 'ok');
-    else flash(res, '失败：' + ((r && r.message) || '未知错误'), 'err');
+    if (r && r.ok) flash(res, 'Connected. Translation sample: ' + r.message, 'ok');
+    else flash(res, 'Failed: ' + ((r && r.message) || 'Unknown error'), 'err');
   });
 });
 
 $('clearCache').addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'DSX_CLEAR_CACHE' }, () => {
-    flash($('cacheInfo'), '缓存已清空', 'ok');
+    flash($('cacheInfo'), 'Cache cleared', 'ok');
     setTimeout(refreshCacheInfo, 1200);
   });
 });

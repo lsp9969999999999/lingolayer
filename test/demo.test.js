@@ -54,7 +54,7 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   await wait(120);
 
   check('演示页加载后未自动翻译（默认手动）', sent.length === 0, JSON.stringify(sent.slice(0, 2)));
-  check('API Key 状态已渲染', /已配置/.test(win.document.getElementById('keyStatus').textContent));
+  check('API key status is rendered', /API key is set/.test(win.document.getElementById('keyStatus').textContent));
 
   win.document.getElementById('btnTranslate').click();
   await wait(400);
@@ -74,13 +74,13 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   check('文件名 src/index.ts 被跳过', !has('src/index.ts'));
   check('标识符行被跳过', !has('MAX_RETRY_COUNT'));
   check('表格说明列仍被翻译', has('Project overview and installation'));
-  check('引导区中文说明未被翻译', !has('跟着做'));
+  check('guide text is not translated', !has('Get started in three steps'));
 
   const holders = win.document.querySelectorAll('.dsx-translation');
   check('译文已内嵌到页面', holders.length > 0, '节点数 ' + holders.length);
   check('译文字号为 92%', holders[0] && holders[0].style.fontSize === '92%');
   check('原文完整保留', win.document.body.textContent.indexOf('For most of the past decade') >= 0);
-  check('第 2 步标记为已完成', win.document.getElementById('step2').classList.contains('done'));
+  check('step 2 is marked complete', win.document.getElementById('step2').classList.contains('done'));
 
   win.document.getElementById('btnRestore').click();
   await wait(50);

@@ -12,7 +12,9 @@
     autoMode: 'off',
     allowlist: [],
     blocklist: [],
-    targetLang: '中文（简体）',
+    replaceModeSites: [],
+    targetLang: 'Chinese (Simplified)',
+    customTargetLang: '',
     style: 'dashed',
     showLoading: true,
     batchSize: 10,
@@ -29,7 +31,7 @@
   // 不进入的容器
   const SKIP_TAGS = new Set([
     'SCRIPT', 'STYLE', 'NOSCRIPT', 'PRE', 'CODE', 'KBD', 'SAMP', 'VAR',
-    'TEXTAREA', 'INPUT', 'SELECT', 'OPTION', 'OPTGROUP', 'BUTTON',
+    'TEXTAREA', 'INPUT', 'SELECT', 'OPTION', 'OPTGROUP',
     'SVG', 'CANVAS', 'IFRAME', 'OBJECT', 'EMBED', 'VIDEO', 'AUDIO',
     'MATH', 'TEMPLATE', 'HEAD', 'META', 'LINK', 'TITLE', 'MAP', 'AREA', 'PICTURE', 'SOURCE'
   ]);
@@ -107,6 +109,23 @@
     return true; // all
   }
 
+  function usesReplaceMode() {
+    return hostMatches(location.hostname, state.settings.replaceModeSites);
+  }
+
+  function normalizeTargetLang(value) {
+    const legacy = {
+      '中文（简体）': 'Chinese (Simplified)',
+      '中文（繁體）': 'Chinese (Traditional)',
+      '中文（繁体）': 'Chinese (Traditional)'
+    };
+    return legacy[String(value || '').trim()] || String(value || '').trim() || DEFAULTS.targetLang;
+  }
+
+  function effectiveTargetLang() {
+    return String(state.settings.customTargetLang || '').trim() || normalizeTargetLang(state.settings.targetLang);
+  }
+
   /**
    * 一次取样同时判断：是否隐藏、是否等宽字体。
    * 等宽字体是代码块/终端/文件名最可靠的通用信号，比逐个网站写规则更稳。
@@ -138,6 +157,7 @@
   function shouldSkipElement(el) {
     const tag = el.tagName;
     if (!tag || SKIP_TAGS.has(tag)) return true;
+    if (tag === 'BUTTON' && !usesReplaceMode()) return true;
     if (el.classList && (el.classList.contains(TRANS_CLASS) || el.classList.contains('notranslate'))) return true;
     if (el.getAttribute('translate') === 'no') return true;
     if (el.getAttribute('data-dsx') === '1') return true;            // 自己插入的节点
@@ -192,7 +212,7 @@
 
   /** 归一化目标语言 */
   function targetKind() {
-    const t = String(state.settings.targetLang || '');
+    const t = effectiveTargetLang();
     if (/繁體|繁体|Traditional/i.test(t)) return 'zh-hant';
     if (/中文|Chinese|zh/i.test(t)) return 'zh-hans';
     if (/English|英文|英语/i.test(t)) return 'en';
@@ -268,7 +288,16 @@
       if (!hasBlockChild) {
         // 叶子块：整块作为一个翻译单元
         if (needsTranslation(rawText)) {
-          found.push({ kind: 'element', el, text: normalize(rawText) });
+          if (usesReplaceMode()) {
+            const elementChildren = Array.from(el.children || []);
+            if (elementChildren.length === 0) {
+              found.push({ kind: 'replace', el, text: normalize(rawText), originalText: rawText });
+            } else {
+              for (const child of elementChildren) stack.push(child);
+            }
+          } else {
+            found.push({ kind: 'element', el, text: normalize(rawText) });
+          }
         }
         continue;
       }
@@ -290,7 +319,8 @@
           run.push(c);
         } else if (c.nodeType === 1) {
           if (isInlineTag(c) && !shouldSkipElement(c)) {
-            run.push(c);
+            if (usesReplaceMode()) stack.push(c);
+            else run.push(c);
           } else {
             flushRun();
             if (!SKIP_TAGS.has(c.tagName)) stack.push(c);
@@ -351,8 +381,18 @@
     return true;
   }
 
+  function mountReplacement(unit) {
+    unit.el.setAttribute(STATE_ATTR, 'pending');
+    unit.el.setAttribute(ID_ATTR, String(unit.id));
+    unit.originalText = unit.el.textContent;
+    unit.el.textContent = '';
+    unit.holder = unit.el;
+    return true;
+  }
+
   function setLoading(unit) {
     if (!unit.holder) return;
+    if (unit.kind === 'replace') return;
     unit.holder.textContent = '';                       // 不写文字，避免满屏"翻译中"
     unit.holder.classList.remove('dsx-error');
     // 占位条由 CSS 延迟 0.45s 才淡入：响应快时用户根本看不到闪烁
@@ -361,6 +401,13 @@
 
   function setTranslated(unit, text) {
     if (!unit.holder) return;
+    if (unit.kind === 'replace') {
+      unit.el.textContent = text;
+      unit.el.setAttribute(STATE_ATTR, 'done');
+      state.stats.done++;
+      reportBadge();
+      return;
+    }
     unit.holder.classList.remove('dsx-loading', 'dsx-error');
     unit.holder.classList.add('dsx-done');
     unit.holder.textContent = text;
@@ -371,9 +418,18 @@
 
   function setError(unit, message) {
     if (!unit.holder) return;
+    if (unit.kind === 'replace') {
+      unit.el.textContent = unit.originalText;
+      unit.el.removeAttribute(STATE_ATTR);
+      unit.el.removeAttribute(ID_ATTR);
+      state.stats.failed++;
+      state.lastError = message || '';
+      reportBadge();
+      return;
+    }
     unit.holder.classList.remove('dsx-loading');
     unit.holder.classList.add('dsx-error');
-    unit.holder.textContent = '译文获取失败，点击重试';
+    unit.holder.textContent = 'Translation failed. Click to retry.';
     unit.holder.title = message || '';
     unit.holder.style.cursor = 'pointer';
     unit.holder.onclick = (e) => {
@@ -478,14 +534,14 @@
         if (!resp || !resp.ok) {
           const msg =
             resp && resp.error === 'NO_API_KEY'
-              ? '尚未设置 DeepSeek API Key，请点击扩展图标进行设置'
-              : (resp && resp.message) || '与后台通信失败';
+              ? 'No DeepSeek API key is set. Open the extension settings to continue.'
+              : (resp && resp.message) || 'Unable to communicate with the extension.';
           batch.forEach((u) => setError(u, msg));
         } else {
           batch.forEach((u, i) => {
             const r = resp.results[i];
             if (r && r.text && !r.error) setTranslated(u, r.text);
-            else setError(u, (r && r.error) || '未返回译文');
+            else setError(u, (r && r.error) || 'No translation was returned.');
           });
         }
         reportBadge();
@@ -515,18 +571,18 @@
 
   function registerUnits(units) {
     for (const unit of units) {
-      const anchor = unit.kind === 'element' ? unit.el : unit.nodes[0];
+      const anchor = unit.kind === 'element' || unit.kind === 'replace' ? unit.el : unit.nodes[0];
       const existing = anchor && state.unitByAnchor.get(anchor);
       if (existing && existing.text === unit.text && existing.holder?.isConnected) continue;
       unit.id = ++state.seq;
-      const holder = makeHolder(unit);
-      if (!mountHolder(unit, holder)) continue;
+      const holder = unit.kind === 'replace' ? null : makeHolder(unit);
+      if (unit.kind === 'replace' ? !mountReplacement(unit) : !mountHolder(unit, holder)) continue;
       state.units.set(unit.id, unit);
       if (anchor) state.unitByAnchor.set(anchor, unit);
       state.stats.total++;
 
       if (state.settings.onlyVisible && state.io) {
-        const anchor = unit.kind === 'element' ? unit.el : unit.parent;
+        const anchor = unit.kind === 'element' || unit.kind === 'replace' ? unit.el : unit.parent;
         let set = state.anchors.get(anchor);
         if (!set) {
           set = new Set();
@@ -548,7 +604,7 @@
     try {
       registerUnits(collectUnits(target));
     } catch (err) {
-      console.warn('[DeepSeek 翻译] 扫描失败:', err);
+      console.warn('[LingoLayer] Scan failed:', err);
     }
   }
 
@@ -651,7 +707,7 @@
     state.active = true;
     document.documentElement.setAttribute('data-dsx-on', '1');
     if (!state.mo) {
-      try { setupObservers(); } catch (err) { console.error('[DeepSeek 翻译] observer setup failed', err); }
+      try { setupObservers(); } catch (err) { console.error('[LingoLayer] Observer setup failed', err); }
     }
     scan(document.body);
     reportBadge();
@@ -667,6 +723,9 @@
     state.scanRoot = null;
     state.queue = [];
     state.firstBatchDone = false;
+    for (const unit of state.units.values()) {
+      if (unit.kind === 'replace' && unit.el?.isConnected) unit.el.textContent = unit.originalText;
+    }
     state.units.clear();
     state.unitByAnchor = new WeakMap();
     state.anchors = new WeakMap();
@@ -771,6 +830,15 @@
       case 'restyle':
         loadSettings().then(restyle);
         break;
+      case 'restart':
+        if (msg.settings && typeof msg.settings === 'object') {
+          Object.assign(state.settings, msg.settings);
+        }
+        if (state.active) {
+          stop();
+          start();
+        }
+        break;
       case 'status':
         break;
     }
@@ -808,6 +876,7 @@
   async function loadSettings() {
     const stored = await chrome.storage.local.get(Object.keys(DEFAULTS));
     state.settings = Object.assign({}, DEFAULTS, stored);
+    state.settings.targetLang = normalizeTargetLang(state.settings.targetLang);
     return state.settings;
   }
 

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>LingoLayer · 操作演示</title>
+<title>LingoLayer · Interactive demo</title>
 <link rel="stylesheet" href="content.css" />
 <link rel="stylesheet" href="demo.css" />
 </head>
@@ -11,8 +11,8 @@
 <header class="hero notranslate" translate="no">
   <div class="hero-in">
     <div class="brand"><span class="logo">L</span> LingoLayer</div>
-    <p class="slogan">网页双语对照翻译演示 —— 下面这页就是真实网页，直接在这里试。</p>
-    <div class="status" id="keyStatus">正在检查配置…</div>
+    <p class="slogan">Bilingual webpage translation demo — try it directly on this real page.</p>
+    <div class="status" id="keyStatus">Checking settings…</div>
   </div>
 </header>
 
@@ -20,25 +20,25 @@
 
   <!-- ============ 引导操作 ============ -->
   <section class="guide notranslate" translate="no">
-    <h2 class="sec-title">跟着做，三步上手</h2>
+    <h2 class="sec-title">Get started in three steps</h2>
 
     <div class="steps">
       <div class="step" id="step1">
         <div class="num">1</div>
         <div class="body">
-          <h3>配置 API Key</h3>
-          <p>在设置页填入 DeepSeek API Key 并测试连接，这是翻译能工作的前提。</p>
-          <button class="btn" id="openOptions">打开设置页</button>
+          <h3>Set up your API key</h3>
+          <p>Enter your DeepSeek API key in Settings and test the connection before translating.</p>
+          <button class="btn" id="openOptions">Open Settings</button>
         </div>
       </div>
 
       <div class="step" id="step2">
         <div class="num">2</div>
         <div class="body">
-          <h3>翻译整页</h3>
-          <p>点下面的按钮翻译本页示例内容，译文会插在每段原文下方，原文完整保留。在真实网页上，点扩展图标或按 <kbd>Alt</kbd>+<kbd>T</kbd> 即可。</p>
-          <button class="btn primary" id="btnTranslate">翻译本页</button>
-          <button class="btn" id="btnRestore">恢复原文</button>
+          <h3>Translate this page</h3>
+          <p>Translate the sample content below. By default, translations appear below the original text. On any webpage, use the extension button or press <kbd>Alt</kbd>+<kbd>T</kbd>.</p>
+          <button class="btn primary" id="btnTranslate">Translate this page</button>
+          <button class="btn" id="btnRestore">Restore original</button>
           <span class="live" id="liveStat"></span>
         </div>
       </div>
@@ -46,9 +46,9 @@
       <div class="step" id="step3">
         <div class="num">3</div>
         <div class="body">
-          <h3>只翻译选中的一句</h3>
-          <p>用鼠标选中下方示例里的任意一句话，然后点这个按钮。译文会嵌入到那句话所在段落的下方。真实网页上可以右键选择「翻译选中内容」或按 <kbd>Alt</kbd>+<kbd>S</kbd>。</p>
-          <button class="btn primary" id="btnSelection">翻译我选中的文字</button>
+          <h3>Translate selected text</h3>
+          <p>Select any sentence below, then use this button. The translation appears below its paragraph. On a webpage, right-click and choose “Translate selected text” or press <kbd>Alt</kbd>+<kbd>S</kbd>.</p>
+          <button class="btn primary" id="btnSelection">Translate selected text</button>
           <span class="live" id="selHint"></span>
         </div>
       </div>
@@ -56,26 +56,26 @@
 
     <div class="tuning">
       <div class="tune">
-        <label for="styleSel">译文样式</label>
+        <label for="styleSel">Translation style</label>
         <select id="styleSel">
-          <option value="dashed">下划虚线</option>
-          <option value="underline">下划实线</option>
-          <option value="highlight">浅色背景</option>
-          <option value="quote">左侧竖线</option>
-          <option value="plain">无装饰</option>
+          <option value="dashed">Dashed underline</option>
+          <option value="underline">Solid underline</option>
+          <option value="highlight">Subtle background</option>
+          <option value="quote">Left border</option>
+          <option value="plain">Plain text</option>
         </select>
       </div>
       <div class="tune">
-        <label for="scaleRange">译文字号 <b id="scaleVal">92</b>%</label>
+        <label for="scaleRange">Translation size <b id="scaleVal">92</b>%</label>
         <input type="range" id="scaleRange" min="70" max="130" step="2" />
       </div>
-      <p class="tip">调整后立即作用于本页已有译文。</p>
+      <p class="tip">Changes apply to translations already shown on this page.</p>
     </div>
   </section>
 
   <!-- ============ 示例正文 ============ -->
   <section class="sample">
-    <h2 class="sec-title notranslate" translate="no">示例正文：任意语言 → 中文</h2>
+    <h2 class="sec-title notranslate" translate="no">Sample content: any language → your target language</h2>
 
     <article>
       <h3>The Quiet Revolution in Everyday Software</h3>
@@ -96,7 +96,7 @@
 
   <!-- ============ 智能跳过展示 ============ -->
   <section class="sample">
-    <h2 class="sec-title notranslate" translate="no">智能跳过：技术内容不会被翻译</h2>
+    <h2 class="sec-title notranslate" translate="no">Smart skip: technical content stays untouched</h2>
     <p class="lead-en">The following blocks stay untouched even when the whole page is translated, because they are code, commands, or file names.</p>
 
     <pre><code>export function createTranslator(options) {
@@ -109,7 +109,7 @@
 
     <table class="files">
       <thead>
-        <tr><th class="notranslate" translate="no">文件</th><th class="notranslate" translate="no">说明（这一列会被翻译）</th></tr>
+        <tr><th class="notranslate" translate="no">File</th><th class="notranslate" translate="no">Description (this column is translated)</th></tr>
       </thead>
       <tbody>
         <tr><td class="mono">README.md</td><td>Project overview and installation instructions.</td></tr>
@@ -119,11 +119,11 @@
     </table>
 
     <p class="mono">getUserProfile · MAX_RETRY_COUNT · --verbose · v2.14.0</p>
-    <p class="note notranslate" translate="no">上面这些标识符、常量、命令行参数与版本号都会被自动识别并跳过。如果某个页面确实需要翻译代码注释，可以在设置页关掉「智能跳过代码」。</p>
+    <p class="note notranslate" translate="no">Identifiers, constants, command arguments, and version numbers above are detected and skipped. Disable “Skip code, commands, and file names” in Settings if you need code comments translated.</p>
   </section>
 
   <footer class="notranslate" translate="no">
-    <p>LingoLayer · 翻译由你自己配置的 API 完成，原文与译文不会发送到开发者服务器。</p>
+    <p>LingoLayer · Translation uses your own API key. Your source text and translations are never sent to the developer’s server.</p>
   </footer>
 </main>
 

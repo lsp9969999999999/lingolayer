@@ -5,9 +5,18 @@ let tab = null;
 let settings = {};
 
 const DEFAULTS = {
-  apiKey: '', enabled: true, autoMode: 'off', allowlist: [], blocklist: [],
-  targetLang: '中文（简体）', style: 'dashed'
+  apiKey: '', enabled: true, autoMode: 'off', allowlist: [], blocklist: [], replaceModeSites: [],
+  targetLang: 'Chinese (Simplified)', customTargetLang: '', style: 'dashed'
 };
+
+function normalizeTargetLang(value) {
+  const legacy = {
+    '中文（简体）': 'Chinese (Simplified)',
+    '中文（繁體）': 'Chinese (Traditional)',
+    '中文（繁体）': 'Chinese (Traditional)'
+  };
+  return legacy[String(value || '').trim()] || String(value || '').trim() || DEFAULTS.targetLang;
+}
 
 function hostOf(url) {
   try { return new URL(url).hostname; } catch (_) { return ''; }
@@ -20,10 +29,10 @@ function inList(host, list) {
   });
 }
 
-async function send(cmd) {
+async function send(cmd, extra) {
   if (!tab?.id) return null;
   try {
-    return await chrome.tabs.sendMessage(tab.id, { type: 'DSX_CMD', cmd });
+    return await chrome.tabs.sendMessage(tab.id, Object.assign({ type: 'DSX_CMD', cmd }, extra || {}));
   } catch (_) {
     return null;
   }
@@ -32,20 +41,20 @@ async function send(cmd) {
 function renderStatus(st) {
   const btn = $('toggle');
   if (!st) {
-    $('stat').textContent = '当前页面不支持翻译（或需刷新页面）';
-    btn.textContent = '翻译此页面';
+    $('stat').textContent = 'Translation is unavailable here. Refresh the page if needed.';
+    btn.textContent = 'Translate this page';
     btn.classList.remove('on');
     return;
   }
-  btn.textContent = st.active ? '恢复原文' : '翻译此页面';
+  btn.textContent = st.active ? 'Restore original' : 'Translate this page';
   btn.classList.toggle('on', !!st.active);
   const s = st.stats || {};
   if (!st.active) {
-    $('stat').textContent = '未开始';
+    $('stat').textContent = 'Not started';
   } else {
-    let txt = '已翻译 ' + (s.done || 0) + ' / ' + (s.total || 0) + ' 段';
-    if (s.pending) txt += '，队列 ' + s.pending;
-    if (s.failed) txt += '，失败 ' + s.failed;
+    let txt = 'Translated ' + (s.done || 0) + ' / ' + (s.total || 0) + ' segments';
+    if (s.pending) txt += ' · ' + s.pending + ' queued';
+    if (s.failed) txt += ' · ' + s.failed + ' failed';
     $('stat').textContent = txt;
   }
   if (st.lastError) $('stat').title = st.lastError;
@@ -54,10 +63,11 @@ function renderStatus(st) {
 async function init() {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const host = hostOf(tab?.url || '');
-  $('host').textContent = host || '当前页面';
+  $('host').textContent = host || 'Current page';
 
   settings = Object.assign({}, DEFAULTS, await chrome.storage.local.get(Object.keys(DEFAULTS)));
-  $('targetLang').value = settings.targetLang;
+  settings.targetLang = normalizeTargetLang(settings.targetLang);
+  $('targetLang').value = settings.customTargetLang ? '__custom__' : settings.targetLang;
   $('style').value = settings.style;
   $('autoMode').value = settings.autoMode;
   $('warn').classList.toggle('hidden', !!settings.apiKey);
@@ -68,6 +78,7 @@ async function init() {
   if (settings.autoMode === 'all') $('siteAuto').checked = !blocked;
   else if (settings.autoMode === 'allowlist') $('siteAuto').checked = allowed;
   else $('siteAuto').checked = false;   // 手动模式下不自动翻译任何站点
+  $('replaceOriginal').checked = inList(host, settings.replaceModeSites);
 
   renderStatus(await send('status'));
   const statusTimer = setInterval(async () => renderStatus(await send('status')), 1000);
@@ -84,7 +95,7 @@ $('toggle').addEventListener('click', async () => {
       renderStatus(await send('on'));
       return;
     } catch (e) {
-      $('stat').textContent = '无法在此页面运行（chrome:// 等受限页面）';
+      $('stat').textContent = 'This page cannot be translated (for example, chrome:// pages).';
       return;
     }
   }
@@ -119,8 +130,31 @@ $('siteAuto').addEventListener('change', async (e) => {
   if (e.target.checked) renderStatus(await send('on'));
 });
 
+$('replaceOriginal').addEventListener('change', async (e) => {
+  const host = hostOf(tab?.url || '');
+  if (!host) return;
+  const sites = new Set(settings.replaceModeSites || []);
+  if (e.target.checked) sites.add(host);
+  else sites.delete(host);
+  settings.replaceModeSites = [...sites];
+  await chrome.storage.local.set({ replaceModeSites: settings.replaceModeSites });
+  const status = await send('status');
+  if (status?.active) {
+    renderStatus(await send('restart', { settings: { replaceModeSites: settings.replaceModeSites } }));
+  }
+});
+
 $('targetLang').addEventListener('change', async (e) => {
+  if (e.target.value === '__custom__') {
+    chrome.runtime.openOptionsPage();
+    return;
+  }
+  settings.customTargetLang = '';
   await chrome.storage.local.set({ targetLang: e.target.value });
+  const status = await send('status');
+  if (status?.active) {
+    renderStatus(await send('restart', { settings: { targetLang: e.target.value, customTargetLang: '' } }));
+  }
 });
 
 $('style').addEventListener('change', async (e) => {

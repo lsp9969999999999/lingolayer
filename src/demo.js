@@ -24,16 +24,16 @@ async function refreshKeyStatus() {
   try {
     const { apiKey } = await chrome.storage.local.get('apiKey');
     if (apiKey) {
-      el.textContent = '✓ 已配置 API Key，可以直接开始翻译';
+      el.textContent = '✓ API key is set. You can start translating.';
       el.className = 'status ok';
       $('step1').classList.add('done');
     } else {
-      el.textContent = '! 尚未配置 API Key，翻译会失败，请先完成第 1 步';
+      el.textContent = '! No API key is set. Complete step 1 before translating.';
       el.className = 'status warn';
       $('step1').classList.remove('done');
     }
   } catch (_) {
-    el.textContent = '无法读取配置';
+    el.textContent = 'Unable to read settings';
     el.className = 'status warn';
   }
 }
@@ -45,25 +45,25 @@ $('openOptions').addEventListener('click', () => chrome.runtime.openOptionsPage(
 $('btnTranslate').addEventListener('click', () => {
   const st = cmd('on');
   $('step2').classList.add('done');
-  if (!st) $('liveStat').textContent = '演示环境未就绪，请重新加载页面';
+  if (!st) $('liveStat').textContent = 'The demo is not ready. Reload this page and try again.';
 });
 
 $('btnRestore').addEventListener('click', () => {
   cmd('off');
   $('step2').classList.remove('done');
-  $('liveStat').textContent = '已恢复原文';
+  $('liveStat').textContent = 'Original text restored';
 });
 
 $('btnSelection').addEventListener('click', () => {
   const sel = String(window.getSelection() || '').trim();
   const hint = $('selHint');
   if (!sel) {
-    hint.textContent = '请先用鼠标选中下面示例里的一句话';
+    hint.textContent = 'Select a sentence in the sample content first';
     hint.className = 'live err';
     return;
   }
   cmd('translateSelection');
-  hint.textContent = '已翻译选中的 ' + sel.length + ' 个字符，译文就在该段下方';
+  hint.textContent = 'Translated ' + sel.length + ' selected characters. The translation is below the paragraph.';
   hint.className = 'live ok';
   $('step3').classList.add('done');
 });
@@ -100,9 +100,9 @@ setInterval(() => {
     $('liveStat').textContent = '';
     return;
   }
-  let txt = '已翻译 ' + (stat.done || 0) + ' / ' + (stat.total || 0) + ' 段';
-  if (stat.pending) txt += '，队列 ' + stat.pending;
-  if (stat.failed) txt += '，失败 ' + stat.failed;
+  let txt = 'Translated ' + (stat.done || 0) + ' / ' + (stat.total || 0) + ' segments';
+  if (stat.pending) txt += ' · ' + stat.pending + ' queued';
+  if (stat.failed) txt += ' · ' + stat.failed + ' failed';
   $('liveStat').textContent = txt;
   $('liveStat').className = stat.failed ? 'live err' : 'live';
 }, 700);

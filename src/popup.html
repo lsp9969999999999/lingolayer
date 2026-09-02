@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <title>LingoLayer</title>
@@ -15,54 +15,70 @@
   </header>
 
   <div class="card">
-    <button id="toggle" class="primary">翻译此页面</button>
-    <div class="stat" id="stat">未开始</div>
+    <button id="toggle" class="primary">Translate this page</button>
+    <div class="stat" id="stat">Not started</div>
   </div>
 
   <div class="row">
-    <label class="lbl">本站自动翻译 <span class="opt">可选</span></label>
+    <label class="lbl">Auto-translate this site <span class="opt">optional</span></label>
     <label class="switch"><input type="checkbox" id="siteAuto" /><span class="slider"></span></label>
   </div>
 
   <div class="row">
-    <label class="lbl" for="targetLang">目标语言</label>
+    <label class="lbl" for="targetLang">Target language</label>
     <select id="targetLang">
-      <option>中文（简体）</option>
-      <option>中文（繁體）</option>
+      <option>Chinese (Simplified)</option>
+      <option>Chinese (Traditional)</option>
       <option>English</option>
       <option>日本語</option>
       <option>한국어</option>
+      <option>Spanish</option>
+      <option>French</option>
+      <option>German</option>
+      <option>Portuguese (Brazil)</option>
+      <option>Italian</option>
+      <option>Russian</option>
+      <option>Arabic</option>
+      <option>Hindi</option>
+      <option>Indonesian</option>
+      <option>Thai</option>
+      <option>Vietnamese</option>
+      <option>Turkish</option>
+      <option>Dutch</option>
+      <option>Polish</option>
+      <option value="__custom__">Custom language (set in Settings)</option>
     </select>
   </div>
 
   <div class="row">
-    <label class="lbl" for="style">译文样式</label>
+    <label class="lbl" for="style">Translation style</label>
     <select id="style">
-      <option value="dashed">下划虚线</option>
-      <option value="underline">下划实线</option>
-      <option value="highlight">浅色背景</option>
-      <option value="quote">左侧竖线</option>
-      <option value="plain">无装饰</option>
+      <option value="dashed">Dashed underline</option>
+      <option value="underline">Solid underline</option>
+      <option value="highlight">Subtle background</option>
+      <option value="quote">Left border</option>
+      <option value="plain">Plain text</option>
     </select>
   </div>
 
   <div class="row">
-    <label class="lbl" for="autoMode">自动模式</label>
+    <label class="lbl" for="autoMode">Automatic translation</label>
     <select id="autoMode">
-      <option value="off">手动启用（默认）</option>
-      <option value="allowlist">仅白名单自动</option>
-      <option value="all">全部网站自动</option>
+      <option value="off">Manual (default)</option>
+      <option value="allowlist">Allowlisted sites</option>
+      <option value="all">All sites</option>
     </select>
   </div>
 
-  <div id="warn" class="warn hidden">尚未设置 API Key，<a href="#" id="toOptions2">立即设置</a></div>
+  <div class="row"><label class="lbl">Replace original on this site <span class="opt">shopping sites</span></label><label class="switch"><input type="checkbox" id="replaceOriginal" /><span class="slider"></span></label></div>
+  <div id="warn" class="warn hidden">No API key yet. <a href="#" id="toOptions2">Set it up</a></div>
 
   <footer>
     <span class="links">
-      <a href="#" id="toDemo">操作演示</a>
-      <a href="#" id="toOptions">高级设置</a>
+      <a href="#" id="toDemo">Demo</a>
+      <a href="#" id="toOptions">Settings</a>
     </span>
-    <span class="tip">Alt+T 整页 · Alt+S 选中</span>
+    <span class="tip">Alt+T page · Alt+S selection</span>
   </footer>
   <script src="popup.js"></script>
 </body>

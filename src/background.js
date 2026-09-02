@@ -9,12 +9,14 @@ const DEFAULTS = {
   endpoint: 'https://api.deepseek.com',
   model: 'deepseek-v4-flash',
   thinkingMode: false,       // 翻译默认关闭深度思考：更快更省
-  targetLang: '中文（简体）',
+  targetLang: 'Chinese (Simplified)',
+  customTargetLang: '',
   temperature: 0.2,
   enabled: true,
   autoMode: 'off',          // off = 手动启用（默认）；allowlist = 仅名单内自动；all = 所有站点自动
   allowlist: [],
   blocklist: [],
+  replaceModeSites: [],
   style: 'dashed',          // dashed | underline | highlight | plain | quote
   showLoading: true,
   batchSize: 10,            // 每次请求最多多少段
@@ -33,7 +35,15 @@ const CACHE_MAX = 3000;
 
 async function getSettings() {
   const stored = await chrome.storage.local.get(Object.keys(DEFAULTS));
-  return Object.assign({}, DEFAULTS, stored);
+  const settings = Object.assign({}, DEFAULTS, stored);
+  const legacy = {
+    '中文（简体）': 'Chinese (Simplified)',
+    '中文（繁體）': 'Chinese (Traditional)',
+    '中文（繁体）': 'Chinese (Traditional)'
+  };
+  settings.targetLang = legacy[settings.targetLang] || settings.targetLang || DEFAULTS.targetLang;
+  settings.translationTarget = String(settings.customTargetLang || '').trim() || settings.targetLang;
+  return settings;
 }
 
 /* ------------------------------------------------------------------ 缓存 */
@@ -106,20 +116,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /* -------------------------------------------------------------- API 调用 */
 
 const SYSTEM_PROMPT = (target) =>
-  '你是一个专业、精准的翻译引擎，服务于网页双语对照阅读。\n' +
-  '任务：把用户给出的 JSON 对象中每一个值翻译成' + target + '。\n' +
-  '规则：\n' +
-  '1. 只输出译文，不要解释、不要添加原文中没有的信息、不要输出注释。\n' +
-  '2. 自动识别源语言，任何语言都翻译成' + target + '。\n' +
-  '3. 保留人名、地名、品牌名、专业术语、代码、变量名、URL、邮箱、数字与单位的正确形式；\n' +
-  '   技术术语可采用"中文（English）"的形式，但不要滥用。\n' +
-  '4. 保持原文的语气与文体（标题简洁、正文流畅），符合中文表达习惯，不要逐字直译。\n' +
-  '5. 保留原文首尾的空格语义；不要合并或拆分条目。\n' +
-  '6. 如果某个值已经是' + target + '，或是纯数字/符号/代码，则原样返回。\n' +
-  '7. 必须严格返回一个 json 对象，键与输入完全一致（字符串形式的序号），值为译文字符串。\n' +
-  '   不要输出 json 以外的任何字符。\n\n' +
-  '示例输入：\n{"1": "Hello world", "2": "Machine learning is powerful."}\n' +
-  '示例输出：\n{"1": "你好，世界", "2": "机器学习非常强大。"}';
+  'You are a precise webpage translation engine.\n' +
+  'Task: translate every value in the supplied JSON object into ' + target + '.\n' +
+  'Rules:\n' +
+  '1. Return translations only: no explanations, notes, or added information.\n' +
+  '2. Detect the source language automatically and translate any language into ' + target + '.\n' +
+  '3. Preserve names, brands, technical terms, code, URLs, email addresses, numbers, and units where appropriate.\n' +
+  '4. Match the original tone and format. Keep titles concise and use natural phrasing for the target language.\n' +
+  '5. Do not merge, split, reorder, or omit entries.\n' +
+  '6. Return text unchanged when it is already in ' + target + ', or contains only numbers, symbols, or code.\n' +
+  '7. Return exactly one JSON object with the same string keys as the input and translated string values.\n' +
+  'Do not output any characters outside the JSON object.\n\n' +
+  'Example input:\n{"1": "Hello world", "2": "Machine learning is powerful."}\n' +
+  'Example output:\n{"1": "你好，世界", "2": "机器学习非常强大。"}';
 
 async function callDeepSeek(items, settings) {
   const payload = {};
@@ -130,12 +139,12 @@ async function callDeepSeek(items, settings) {
   const body = {
     model: settings.model,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT(settings.targetLang) },
+      { role: 'system', content: SYSTEM_PROMPT(settings.translationTarget) },
       {
         role: 'user',
         content:
-          '请把下面 json 中的每个值翻译成' + settings.targetLang +
-          '，并以同样的 json 结构返回：\n' + JSON.stringify(payload)
+          'Translate every value in the JSON below into ' + settings.translationTarget +
+          ' and return the same JSON structure:\n' + JSON.stringify(payload)
       }
     ],
     stream: false,
@@ -189,7 +198,7 @@ async function callDeepSeek(items, settings) {
 
   const data = await res.json();
   let content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string' || !content.trim()) throw new Error('接口返回内容为空');
+  if (typeof content !== 'string' || !content.trim()) throw new Error('The API returned an empty response.');
 
   content = content.trim();
   const fence = content.match(/^\u0060\u0060\u0060(?:json)?\s*([\s\S]*?)\s*\u0060\u0060\u0060$/);
@@ -202,7 +211,7 @@ async function callDeepSeek(items, settings) {
     const s = content.indexOf('{');
     const e = content.lastIndexOf('}');
     if (s >= 0 && e > s) parsed = JSON.parse(content.slice(s, e + 1));
-    else throw new Error('无法解析模型返回的 JSON');
+    else throw new Error('The API response was not valid JSON.');
   }
 
   return items.map((orig, i) => {
@@ -239,7 +248,7 @@ async function translateItems(texts, settings) {
 
   texts.forEach((t, i) => {
     if (cache) {
-      const hit = cache.get(cacheKey(t, settings.targetLang, settings.model));
+      const hit = cache.get(cacheKey(t, settings.translationTarget, settings.model));
       if (typeof hit === 'string') {
         out[i] = { text: hit, cached: true };
         return;
@@ -279,18 +288,18 @@ async function translateItems(texts, settings) {
       if (typeof translated === 'string' && translated.trim()) {
         out[origIdx] = { text: translated };
         if (cache) {
-          cache.set(cacheKey(texts[origIdx], settings.targetLang, settings.model), translated);
+          cache.set(cacheKey(texts[origIdx], settings.translationTarget, settings.model), translated);
           scheduleCacheSave();
         }
       } else {
-        out[origIdx] = { text: '', error: '未返回译文' };
+        out[origIdx] = { text: '', error: 'No translation was returned.' };
       }
     });
   } finally {
     release();
   }
 
-  return out.map((r) => r || { text: '', error: '翻译失败' });
+  return out.map((r) => r || { text: '', error: 'Translation failed.' });
 }
 
 /* ------------------------------------------------------------ 消息路由 */
@@ -303,7 +312,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       try {
         const settings = await getSettings();
         if (!settings.apiKey) {
-          sendResponse({ ok: false, error: 'NO_API_KEY', message: '尚未设置 DeepSeek API Key' });
+          sendResponse({ ok: false, error: 'NO_API_KEY', message: 'No DeepSeek API key is set.' });
           return;
         }
         const texts = Array.isArray(msg.texts) ? msg.texts : [];
@@ -325,11 +334,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       try {
         const settings = Object.assign(await getSettings(), msg.override || {});
         if (!settings.apiKey) {
-          sendResponse({ ok: false, message: '请先填写 API Key' });
+          sendResponse({ ok: false, message: 'Enter an API key first.' });
           return;
         }
         const r = await callDeepSeek(['Hello, world! This is a connection test.'], settings);
-        sendResponse({ ok: true, message: r[0] || '(空)' });
+        sendResponse({ ok: true, message: r[0] || '(empty)' });
       } catch (err) {
         sendResponse({ ok: false, message: String(err && err.message || err) });
       }
@@ -396,18 +405,18 @@ chrome.runtime.onInstalled.addListener(async () => {
     // 选中文字时：只翻译选中内容
     chrome.contextMenus.create({
       id: 'dsx-selection',
-      title: 'LingoLayer：翻译选中内容「%s」',
+      title: 'LingoLayer: Translate selected text "%s"',
       contexts: ['selection']
     });
     // 没有选中时：整页翻译
     chrome.contextMenus.create({
       id: 'dsx-toggle',
-      title: 'LingoLayer：翻译此页面 / 恢复原文',
+      title: 'LingoLayer: Translate this page / restore original',
       contexts: ['page']
     });
     chrome.contextMenus.create({
       id: 'dsx-options',
-      title: 'LingoLayer 设置…',
+      title: 'LingoLayer settings…',
       contexts: ['action']
     });
   });
