@@ -13,6 +13,7 @@
     allowlist: [],
     blocklist: [],
     replaceModeSites: [],
+    skippedTexts: [],
     targetLang: 'Chinese (Simplified)',
     customTargetLang: '',
     style: 'dashed',
@@ -27,6 +28,7 @@
   const TRANS_CLASS = 'dsx-translation';
   const STATE_ATTR = 'data-dsx-state';
   const ID_ATTR = 'data-dsx-id';
+  const REGION_HIGHLIGHT_CLASS = 'dsx-region-candidate';
 
   // 不进入的容器
   const SKIP_TAGS = new Set([
@@ -87,6 +89,7 @@
     stats: { total: 0, done: 0, failed: 0 },
     lastError: ''
   };
+  let regionPicker = null;
 
   /* ------------------------------------------------------------- 工具函数 */
 
@@ -227,6 +230,7 @@
     if (s.length < 2) return false;
     if (s.length > 5000) return false;
     if (/^https?:\/\/\S+$/i.test(s)) return false;                    // 纯链接
+    if ((state.settings.skippedTexts || []).some((text) => normalize(text).toLocaleLowerCase() === s.toLocaleLowerCase())) return false;
     if (state.settings.skipCode !== false && looksLikeCode(s)) return false; // 代码 / 命令 / 文件名
 
     // 下面按各语系字符统计判断；纯数字 / 符号 / emoji 会因为没有任何字母而被跳过
@@ -385,6 +389,7 @@
     unit.el.setAttribute(STATE_ATTR, 'pending');
     unit.el.setAttribute(ID_ATTR, String(unit.id));
     unit.originalText = unit.el.textContent;
+    unit.originalTitle = unit.el.getAttribute('title');
     unit.el.textContent = '';
     unit.holder = unit.el;
     return true;
@@ -403,7 +408,10 @@
     if (!unit.holder) return;
     if (unit.kind === 'replace') {
       unit.el.textContent = text;
+      unit.el.setAttribute('data-dsx-original', unit.originalText);
+      unit.el.setAttribute('title', 'Original: ' + normalize(unit.originalText));
       unit.el.setAttribute(STATE_ATTR, 'done');
+      bindFeedback(unit);
       state.stats.done++;
       reportBadge();
       return;
@@ -411,6 +419,7 @@
     unit.holder.classList.remove('dsx-loading', 'dsx-error');
     unit.holder.classList.add('dsx-done');
     unit.holder.textContent = text;
+    bindFeedback(unit);
     if (unit.kind === 'element') unit.el.setAttribute(STATE_ATTR, 'done');
     state.stats.done++;
     reportBadge();
@@ -419,9 +428,7 @@
   function setError(unit, message) {
     if (!unit.holder) return;
     if (unit.kind === 'replace') {
-      unit.el.textContent = unit.originalText;
-      unit.el.removeAttribute(STATE_ATTR);
-      unit.el.removeAttribute(ID_ATTR);
+      restoreReplacement(unit);
       state.stats.failed++;
       state.lastError = message || '';
       reportBadge();
@@ -444,6 +451,88 @@
     if (unit.kind === 'element') unit.el.setAttribute(STATE_ATTR, 'error');
     state.stats.failed++;
     state.lastError = message || '';
+  }
+
+  function restoreReplacement(unit) {
+    if (!unit.el?.isConnected) return;
+    unit.el.textContent = unit.originalText;
+    if (unit.feedbackHandler) unit.el.removeEventListener('dblclick', unit.feedbackHandler);
+    unit.el.removeAttribute('data-dsx-original');
+    if (unit.originalTitle === null) unit.el.removeAttribute('title');
+    else unit.el.setAttribute('title', unit.originalTitle);
+    unit.el.removeAttribute(STATE_ATTR);
+    unit.el.removeAttribute(ID_ATTR);
+  }
+
+  function removeFeedbackCard() {
+    document.querySelector('.dsx-feedback-card[data-dsx="1"]')?.remove();
+  }
+
+  function bindFeedback(unit) {
+    if (!unit.holder) return;
+    if (unit.feedbackHandler) unit.holder.removeEventListener('dblclick', unit.feedbackHandler);
+    unit.feedbackHandler = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      showFeedbackCard(unit);
+    };
+    unit.holder.addEventListener('dblclick', unit.feedbackHandler);
+  }
+
+  function showFeedbackCard(unit) {
+    removeFeedbackCard();
+    if (!unit.holder?.isConnected || !unit.text) return;
+    const card = document.createElement('div');
+    card.className = 'dsx-feedback-card notranslate';
+    card.setAttribute('data-dsx', '1');
+    card.setAttribute('translate', 'no');
+    card.innerHTML = '<span>Refine translation</span><button data-action="natural">More natural</button><button data-action="keep">Keep original</button><button data-action="skip">Don\'t translate</button>';
+    const rect = unit.holder.getBoundingClientRect();
+    card.style.left = Math.max(8, Math.min(window.innerWidth - 310, rect.left)) + 'px';
+    card.style.top = Math.min(window.innerHeight - 44, Math.max(8, rect.bottom + 6)) + 'px';
+    card.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const action = event.target?.getAttribute?.('data-action');
+      if (action === 'natural') refineTranslation(unit);
+      else if (action === 'keep') keepOriginal(unit);
+      else if (action === 'skip') skipText(unit);
+    });
+    document.body.appendChild(card);
+  }
+
+  function refineTranslation(unit) {
+    removeFeedbackCard();
+    unit.feedback = 'natural';
+    setLoading(unit);
+    sendBatch([unit]);
+  }
+
+  async function keepOriginal(unit) {
+    removeFeedbackCard();
+    const result = await chrome.storage.local.get('siteGlossaries');
+    const entries = Array.isArray(result.siteGlossaries) ? result.siteGlossaries.slice() : [];
+    const exists = entries.some((entry) => entry.domain === location.hostname && entry.source === unit.text && entry.target === unit.text);
+    if (!exists) entries.push({ domain: location.hostname, source: unit.text, target: unit.text });
+    await chrome.storage.local.set({ siteGlossaries: entries });
+    setTranslated(unit, unit.text);
+  }
+
+  async function skipText(unit) {
+    removeFeedbackCard();
+    const skipped = Array.isArray(state.settings.skippedTexts) ? state.settings.skippedTexts.slice() : [];
+    if (!skipped.some((text) => normalize(text).toLocaleLowerCase() === unit.text.toLocaleLowerCase())) skipped.push(unit.text);
+    state.settings.skippedTexts = skipped;
+    await chrome.storage.local.set({ skippedTexts: skipped });
+    if (unit.kind === 'replace') restoreReplacement(unit);
+    else {
+      if (unit.feedbackHandler) unit.holder?.removeEventListener('dblclick', unit.feedbackHandler);
+      unit.holder?.remove();
+      if (unit.kind === 'element') {
+        unit.el.removeAttribute(STATE_ATTR);
+        unit.el.removeAttribute(ID_ATTR);
+      }
+    }
   }
 
   /**
@@ -555,7 +644,8 @@
     };
 
     try {
-      chrome.runtime.sendMessage({ type: 'DSX_TRANSLATE', texts }, (resp) => {
+      const feedback = batch.length === 1 ? batch[0].feedback : '';
+      chrome.runtime.sendMessage({ type: 'DSX_TRANSLATE', texts, feedback }, (resp) => {
         if (chrome.runtime.lastError) {
           done({ ok: false, message: chrome.runtime.lastError.message });
           return;
@@ -702,19 +792,23 @@
 
   /* --------------------------------------------------------------- 开 / 关 */
 
-  function start() {
-    if (state.active) return;
+  function start(root) {
+    if (state.active) {
+      if (root) scan(root);
+      return;
+    }
     state.active = true;
     document.documentElement.setAttribute('data-dsx-on', '1');
     if (!state.mo) {
       try { setupObservers(); } catch (err) { console.error('[LingoLayer] Observer setup failed', err); }
     }
-    scan(document.body);
+    scan(root || document.body);
     reportBadge();
   }
 
   function stop() {
     state.active = false;
+    removeFeedbackCard();
     document.documentElement.removeAttribute('data-dsx-on');
     if (state.io) { state.io.disconnect(); state.io = null; }
     if (state.mo) { state.mo.disconnect(); state.mo = null; }
@@ -724,7 +818,7 @@
     state.queue = [];
     state.firstBatchDone = false;
     for (const unit of state.units.values()) {
-      if (unit.kind === 'replace' && unit.el?.isConnected) unit.el.textContent = unit.originalText;
+      if (unit.kind === 'replace') restoreReplacement(unit);
     }
     state.units.clear();
     state.unitByAnchor = new WeakMap();
@@ -746,6 +840,66 @@
       const scale = Number(state.settings.fontScale) || 92;
       n.style.fontSize = scale + '%';
     });
+  }
+
+  function isRegionCandidate(el) {
+    if (!el || el === document.body || el === document.documentElement) return false;
+    const textLength = normalize(el.textContent).length;
+    if (textLength < 2 || textLength > 1600) return false;
+    if (['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'P', 'TD', 'TH', 'LABEL'].includes(el.tagName)) return true;
+    if (['ARTICLE', 'NAV', 'LI', 'TR'].includes(el.tagName)) return true;
+    if (el.tagName === 'SECTION') return textLength <= 1000;
+    const cls = typeof el.className === 'string' ? el.className : '';
+    return /(?:product|item|card|review|comment|menu|nav|filter|category)/i.test(cls);
+  }
+
+  function findRegionTarget(node) {
+    let el = node && node.nodeType === 1 ? node : node?.parentElement;
+    let fallback = null;
+    while (el && el !== document.body) {
+      if (!shouldSkipElement(el) && normalize(el.textContent).length >= 2) {
+        if (!fallback) fallback = el;
+        if (isRegionCandidate(el)) return el;
+      }
+      el = el.parentElement;
+    }
+    return fallback;
+  }
+
+  function cancelRegionPicker() {
+    if (!regionPicker) return;
+    window.removeEventListener('mousemove', regionPicker.move, true);
+    window.removeEventListener('click', regionPicker.click, true);
+    window.removeEventListener('keydown', regionPicker.keydown, true);
+    regionPicker.highlight?.classList.remove(REGION_HIGHLIGHT_CLASS);
+    regionPicker = null;
+  }
+
+  function beginRegionPicker() {
+    cancelRegionPicker();
+    const picker = { highlight: null };
+    picker.move = (event) => {
+      const target = findRegionTarget(event.target);
+      if (target === picker.highlight) return;
+      picker.highlight?.classList.remove(REGION_HIGHLIGHT_CLASS);
+      picker.highlight = target;
+      picker.highlight?.classList.add(REGION_HIGHLIGHT_CLASS);
+    };
+    picker.click = (event) => {
+      const target = findRegionTarget(event.target);
+      if (!target) return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancelRegionPicker();
+      start(target);
+    };
+    picker.keydown = (event) => {
+      if (event.key === 'Escape') cancelRegionPicker();
+    };
+    regionPicker = picker;
+    window.addEventListener('mousemove', picker.move, true);
+    window.addEventListener('click', picker.click, true);
+    window.addEventListener('keydown', picker.keydown, true);
   }
 
   function reportBadge() {
@@ -808,6 +962,104 @@
     sendBatch([unit]);
   }
 
+  function collectShoppingText() {
+    const selector = 'h1, h2, [class*="product"], [class*="price"], [class*="shipping"], [class*="delivery"], [class*="return"], [class*="spec"], table, dl, article';
+    const seen = new Set();
+    const sections = [];
+    for (const element of document.querySelectorAll(selector)) {
+      if (shouldSkipElement(element) || inspectStyle(element).hidden) continue;
+      const text = normalize(element.textContent);
+      if (text.length < 3 || seen.has(text)) continue;
+      seen.add(text);
+      sections.push(text);
+      if (sections.join('\n').length >= 11000) break;
+    }
+    return sections.join('\n').slice(0, 12000);
+  }
+
+  function removeShoppingCard() {
+    document.querySelector('.dsx-shopping-card[data-dsx="1"]')?.remove();
+  }
+
+  function renderShoppingStatus(message, isError) {
+    removeShoppingCard();
+    const card = document.createElement('aside');
+    card.className = 'dsx-shopping-card notranslate' + (isError ? ' dsx-shopping-error' : '');
+    card.setAttribute('data-dsx', '1');
+    card.setAttribute('translate', 'no');
+    const header = document.createElement('header');
+    const title = document.createElement('strong');
+    const close = document.createElement('button');
+    title.textContent = 'Shopping summary';
+    close.textContent = '×';
+    close.title = 'Close';
+    close.addEventListener('click', removeShoppingCard);
+    header.append(title, close);
+    const text = document.createElement('p');
+    text.textContent = message;
+    card.append(header, text);
+    document.body.appendChild(card);
+  }
+
+  function addSummaryRow(card, label, value) {
+    const row = document.createElement('div');
+    const strong = document.createElement('strong');
+    const text = document.createElement('span');
+    strong.textContent = label;
+    text.textContent = value;
+    row.append(strong, text);
+    card.appendChild(row);
+  }
+
+  function renderShoppingSummary(summary) {
+    removeShoppingCard();
+    const card = document.createElement('aside');
+    card.className = 'dsx-shopping-card notranslate';
+    card.setAttribute('data-dsx', '1');
+    card.setAttribute('translate', 'no');
+    const header = document.createElement('header');
+    const title = document.createElement('strong');
+    const close = document.createElement('button');
+    title.textContent = 'Shopping summary';
+    close.textContent = '×';
+    close.title = 'Close';
+    close.addEventListener('click', removeShoppingCard);
+    header.append(title, close);
+    const overview = document.createElement('p');
+    overview.textContent = summary.summary;
+    card.append(header, overview);
+    addSummaryRow(card, 'Price', summary.price);
+    addSummaryRow(card, 'Delivery', summary.delivery);
+    addSummaryRow(card, 'Returns', summary.returns);
+    if (summary.highlights?.length) {
+      const list = document.createElement('ul');
+      summary.highlights.forEach((item) => {
+        const entry = document.createElement('li');
+        entry.textContent = item;
+        list.appendChild(entry);
+      });
+      card.appendChild(list);
+    }
+    document.body.appendChild(card);
+  }
+
+  function summarizeShopping() {
+    const pageText = collectShoppingText();
+    if (!pageText) {
+      renderShoppingStatus('No product details were found on this page.', true);
+      return;
+    }
+    renderShoppingStatus('Creating your shopping summary…');
+    chrome.runtime.sendMessage({ type: 'DSX_SHOPPING_SUMMARY', pageText }, (response) => {
+      if (chrome.runtime.lastError || !response?.ok) {
+        state.lastError = response?.message || chrome.runtime.lastError?.message || 'Unable to create shopping summary.';
+        renderShoppingStatus(state.lastError, true);
+        return;
+      }
+      renderShoppingSummary(response.summary);
+    });
+  }
+
   /* ------------------------------------------------------------- 消息接口 */
 
   function handleCommand(msg) {
@@ -824,8 +1076,14 @@
       case 'translateSelection':
         translateSelection(msg.text);
         break;
+      case 'summarizeShopping':
+        summarizeShopping();
+        break;
       case 'rescan':
         scan(document.body);
+        break;
+      case 'selectRegion':
+        beginRegionPicker();
         break;
       case 'restyle':
         loadSettings().then(restyle);
@@ -847,7 +1105,8 @@
       active: state.active,
       host: location.hostname,
       stats: Object.assign({ pending: state.queue.length }, state.stats),
-      lastError: state.lastError
+      lastError: state.lastError,
+      selectingRegion: !!regionPicker
     };
   }
 

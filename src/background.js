@@ -17,6 +17,8 @@ const DEFAULTS = {
   allowlist: [],
   blocklist: [],
   replaceModeSites: [],
+  siteGlossaries: [],
+  skippedTexts: [],
   style: 'dashed',          // dashed | underline | highlight | plain | quote
   showLoading: true,
   batchSize: 10,            // 每次请求最多多少段
@@ -89,6 +91,30 @@ function cacheKey(text, target, model) {
   return model + '\u0001' + target + '\u0001' + text;
 }
 
+function hostMatches(host, domain) {
+  host = String(host || '').toLowerCase();
+  domain = String(domain || '').trim().toLowerCase();
+  return domain === '*' || host === domain || host.endsWith('.' + domain);
+}
+
+function glossaryForHost(entries, host) {
+  const selected = [];
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const source = String(entry?.source || '').trim();
+    const target = String(entry?.target || '').trim();
+    if (source && target && hostMatches(host, entry.domain)) selected.push({ source, target });
+  }
+  return selected;
+}
+
+function glossarySignature(glossary) {
+  return glossary.map((entry) => entry.source + '=' + entry.target).sort().join('\u0002');
+}
+
+function cacheKeyWithGlossary(text, settings, glossary, feedback) {
+  return cacheKey(text, settings.translationTarget, settings.model) + '\u0001' + glossarySignature(glossary) + '\u0001' + String(feedback || '');
+}
+
 /* ------------------------------------------------------------ 并发调度器 */
 
 let active = 0;
@@ -130,7 +156,7 @@ const SYSTEM_PROMPT = (target) =>
   'Example input:\n{"1": "Hello world", "2": "Machine learning is powerful."}\n' +
   'Example output:\n{"1": "你好，世界", "2": "机器学习非常强大。"}';
 
-async function callDeepSeek(items, settings) {
+async function callDeepSeek(items, settings, glossary, feedback) {
   const payload = {};
   items.forEach((it, i) => { payload[String(i + 1)] = it; });
 
@@ -139,7 +165,9 @@ async function callDeepSeek(items, settings) {
   const body = {
     model: settings.model,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT(settings.translationTarget) },
+      { role: 'system', content: SYSTEM_PROMPT(settings.translationTarget) + (glossary.length
+        ? '\n\nRequired terminology (use these exact translations whenever the source term appears):\n' + glossary.map((entry) => '- ' + entry.source + ' => ' + entry.target).join('\n')
+        : '') + (feedback === 'natural' ? '\n\nRefinement request: use especially natural, shopper-friendly wording while preserving the original meaning.' : '') },
       {
         role: 'user',
         content:
@@ -220,11 +248,11 @@ async function callDeepSeek(items, settings) {
   });
 }
 
-async function callWithRetry(items, settings) {
+async function callWithRetry(items, settings, glossary, feedback) {
   let lastErr;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await callDeepSeek(items, settings);
+      return await callDeepSeek(items, settings, glossary, feedback);
     } catch (err) {
       lastErr = err;
       const status = err.status;
@@ -237,18 +265,68 @@ async function callWithRetry(items, settings) {
   throw lastErr;
 }
 
+async function callShoppingSummary(pageText, settings) {
+  const body = {
+    model: settings.model,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a concise shopping-page analyst. Extract only facts supported by the supplied page text. Return valid JSON with string fields summary, price, delivery, returns, highlights. highlights must be an array of up to 4 short strings. Use ' + settings.translationTarget + ' for prose, preserve brands, models, prices, currencies, and unknown fields as "Not found". Do not infer missing facts.'
+      },
+      { role: 'user', content: 'Shopping page text:\n' + pageText }
+    ],
+    stream: false,
+    response_format: { type: 'json_object' },
+    max_tokens: 1400,
+    temperature: 0.2
+  };
+  const base = String(settings.endpoint || DEFAULTS.endpoint).replace(/\/+$/, '');
+  const url = base.endsWith('/chat/completions') ? base : base + '/chat/completions';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90000);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.apiKey },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    let content = String(data?.choices?.[0]?.message?.content || '').trim();
+    const fence = content.match(/^\u0060\u0060\u0060(?:json)?\s*([\s\S]*?)\s*\u0060\u0060\u0060$/);
+    if (fence) content = fence[1].trim();
+    const parsed = JSON.parse(content);
+    return {
+      summary: String(parsed.summary || 'Not found'),
+      price: String(parsed.price || 'Not found'),
+      delivery: String(parsed.delivery || 'Not found'),
+      returns: String(parsed.returns || 'Not found'),
+      highlights: Array.isArray(parsed.highlights) ? parsed.highlights.slice(0, 4).map(String) : []
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * 翻译一批文本，带缓存与逐条降级。
  * @returns {Promise<Array<{text:string, error?:string}>>}
  */
-async function translateItems(texts, settings) {
+async function translateItems(texts, settings, glossary, feedback) {
   const out = new Array(texts.length).fill(null);
   const cache = settings.cacheEnabled ? await loadCache() : null;
   const todoIdx = [];
+  const exactTerms = new Map(glossary.map((entry) => [entry.source.toLocaleLowerCase(), entry.target]));
 
   texts.forEach((t, i) => {
+    const exact = exactTerms.get(String(t).trim().toLocaleLowerCase());
+    if (exact) {
+      out[i] = { text: exact, glossary: true };
+      return;
+    }
     if (cache) {
-      const hit = cache.get(cacheKey(t, settings.translationTarget, settings.model));
+      const hit = cache.get(cacheKeyWithGlossary(t, settings, glossary, feedback));
       if (typeof hit === 'string') {
         out[i] = { text: hit, cached: true };
         return;
@@ -264,14 +342,14 @@ async function translateItems(texts, settings) {
     const pending = todoIdx.map((i) => texts[i]);
     let results;
     try {
-      results = await callWithRetry(pending, settings);
+      results = await callWithRetry(pending, settings, glossary, feedback);
     } catch (err) {
       // 整批失败 -> 逐条降级重试，避免一条脏数据毁掉整批
       if (pending.length > 1) {
         results = [];
         for (const one of pending) {
           try {
-            const r = await callWithRetry([one], settings);
+            const r = await callWithRetry([one], settings, glossary, feedback);
             results.push(r[0] || '');
           } catch (_e2) {
             results.push(null);
@@ -288,7 +366,7 @@ async function translateItems(texts, settings) {
       if (typeof translated === 'string' && translated.trim()) {
         out[origIdx] = { text: translated };
         if (cache) {
-          cache.set(cacheKey(texts[origIdx], settings.translationTarget, settings.model), translated);
+          cache.set(cacheKeyWithGlossary(texts[origIdx], settings, glossary, feedback), translated);
           scheduleCacheSave();
         }
       } else {
@@ -320,7 +398,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true, results: [] });
           return;
         }
-        const results = await translateItems(texts, settings);
+        const host = new URL(sender?.tab?.url || 'https://invalid.local').hostname;
+        const glossary = glossaryForHost(settings.siteGlossaries, host);
+        const results = await translateItems(texts, settings, glossary, msg.feedback || '');
         sendResponse({ ok: true, results });
       } catch (err) {
         sendResponse({ ok: false, error: 'REQUEST_FAILED', message: String(err && err.message || err) });
@@ -337,10 +417,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: false, message: 'Enter an API key first.' });
           return;
         }
-        const r = await callDeepSeek(['Hello, world! This is a connection test.'], settings);
+        const r = await callDeepSeek(['Hello, world! This is a connection test.'], settings, [], '');
         sendResponse({ ok: true, message: r[0] || '(empty)' });
       } catch (err) {
         sendResponse({ ok: false, message: String(err && err.message || err) });
+      }
+    })();
+    return true;
+  }
+
+  if (msg.type === 'DSX_SHOPPING_SUMMARY') {
+    (async () => {
+      try {
+        const settings = await getSettings();
+        if (!settings.apiKey) {
+          sendResponse({ ok: false, error: 'NO_API_KEY', message: 'No DeepSeek API key is set.' });
+          return;
+        }
+        const pageText = String(msg.pageText || '').trim().slice(0, 12000);
+        if (!pageText) {
+          sendResponse({ ok: false, message: 'No shopping-page text was found.' });
+          return;
+        }
+        sendResponse({ ok: true, summary: await callShoppingSummary(pageText, settings) });
+      } catch (err) {
+        sendResponse({ ok: false, error: 'SUMMARY_FAILED', message: String(err && err.message || err) });
       }
     })();
     return true;

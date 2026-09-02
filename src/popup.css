@@ -21,6 +21,11 @@ button.primary {
 }
 button.primary:hover { background: #3d59e0; }
 button.primary.on { background: #10a37f; }
+button.secondary {
+  width: 100%; margin-top: 7px; padding: 7px; border: 1px solid #d9def8; border-radius: 8px;
+  background: #fff; color: #4058d8; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+button.secondary:hover { background: #f3f5ff; }
 .stat { margin-top: 7px; font-size: 11px; color: #6b7280; text-align: center; }
 .row { display: flex; align-items: center; justify-content: space-between; padding: 7px 2px; }
 .lbl { color: #3c4257; }

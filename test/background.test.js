@@ -16,6 +16,9 @@ const sandbox = {
   fetch: async (url, opts) => {
     calls.push({ url, opts });
     const body = JSON.parse(opts.body);
+    if (body.messages[0].content.includes('shopping-page analyst')) {
+      return makeResp(JSON.stringify({ summary: 'Compact headphones for travel.', price: '$39.99', delivery: 'Free delivery', returns: '30-day returns', highlights: ['Noise cancelling'] }));
+    }
     const payload = JSON.parse(body.messages[1].content.slice(body.messages[1].content.indexOf('\n') + 1) || '{}');
     if (scenario === 'ok') {
       const out = {};
@@ -65,11 +68,11 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(require('path').resolve(__dirname, '../src/background.js'), 'utf8'), sandbox, { filename: 'background.js' });
 
-function ask(msg) {
+function ask(msg, sender) {
   return new Promise((resolve) => {
     let done = false;
     for (const fn of listeners) {
-      const r = fn(msg, {}, (resp) => { if (!done) { done = true; resolve(resp); } });
+      const r = fn(msg, sender || {}, (resp) => { if (!done) { done = true; resolve(resp); } });
       if (r === true) return;
     }
   });
@@ -96,6 +99,18 @@ function check(name, cond, extra) { results.push([name, !!cond, extra]); }
   const before = calls.length;
   r = await ask({ type: 'DSX_TRANSLATE', texts: ['Hello world'] });
   check('命中缓存不再发请求', calls.length === before && r.results[0].text === '译文-Hello world');
+
+  store.siteGlossaries = [{ domain: 'shop.example.com', source: 'Add to cart', target: '加入购物车' }];
+  const glossaryCalls = calls.length;
+  r = await ask({ type: 'DSX_TRANSLATE', texts: ['Add to cart'] }, { tab: { url: 'https://shop.example.com/product/1' } });
+  check('站点词表精确匹配无需调用 API', calls.length === glossaryCalls && r.results[0].text === '加入购物车', JSON.stringify(r.results));
+  r = await ask({ type: 'DSX_TRANSLATE', texts: ['Add to cart details'] }, { tab: { url: 'https://shop.example.com/product/1' } });
+  const glossaryBody = JSON.parse(calls[calls.length - 1].opts.body);
+  check('站点词表会写入模型规则', glossaryBody.messages[0].content.includes('Add to cart => 加入购物车'));
+  store.siteGlossaries = [];
+  r = await ask({ type: 'DSX_TRANSLATE', texts: ['Natural wording case'], feedback: 'natural' });
+  const naturalBody = JSON.parse(calls[calls.length - 1].opts.body);
+  check('自然化反馈会写入模型规则', naturalBody.messages[0].content.includes('shopper-friendly wording'));
 
   scenario = 'fenced';
   r = await ask({ type: 'DSX_TRANSLATE', texts: ['Fenced case'] });
@@ -129,6 +144,9 @@ function check(name, cond, extra) { results.push([name, !!cond, extra]); }
   const bodyT = JSON.parse(calls[m].opts.body);
   check('开启思考模式时下发 enabled 且不带 temperature', bodyT.thinking.type === 'enabled' && bodyT.temperature === undefined, JSON.stringify(bodyT.thinking));
   store.thinkingMode = false;
+
+  r = await ask({ type: 'DSX_SHOPPING_SUMMARY', pageText: 'Wireless headphones $39.99. Free delivery. 30-day returns.' });
+  check('购物摘要返回结构化信息', r.ok && r.summary.price === '$39.99' && r.summary.highlights[0] === 'Noise cancelling', JSON.stringify(r));
 
   let fail = 0;
   results.forEach(([name, ok, extra]) => { if (!ok) fail++; console.log((ok ? '  PASS  ' : '  FAIL  ') + name + (ok ? '' : '  <- ' + extra)); });

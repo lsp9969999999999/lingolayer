@@ -102,6 +102,36 @@ $('toggle').addEventListener('click', async () => {
   renderStatus(st);
 });
 
+$('translateArea').addEventListener('click', async () => {
+  let status = await send('selectRegion');
+  if (!status) {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['src/content.js'] });
+      await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['src/content.css'] });
+      status = await send('selectRegion');
+    } catch (_) {
+      $('stat').textContent = 'This page cannot be translated (for example, chrome:// pages).';
+      return;
+    }
+  }
+  if (status?.selectingRegion) window.close();
+});
+
+$('shoppingSummary').addEventListener('click', async () => {
+  let status = await send('summarizeShopping');
+  if (!status) {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['src/content.js'] });
+      await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['src/content.css'] });
+      status = await send('summarizeShopping');
+    } catch (_) {
+      $('stat').textContent = 'This page cannot be summarized (for example, chrome:// pages).';
+      return;
+    }
+  }
+  if (status) window.close();
+});
+
 $('siteAuto').addEventListener('change', async (e) => {
   const host = hostOf(tab?.url || '');
   if (!host) return;

@@ -52,12 +52,14 @@ const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mill
     ['menu button is translated', document.querySelector('button').textContent === '[translated] New arrivals'],
     ['product label is translated', document.querySelector('.card span').textContent === '[translated] Wireless headphones'],
     ['price remains unchanged', document.querySelectorAll('.card span')[1].textContent === '$39.99'],
-    ['no bilingual holder is added', document.querySelectorAll('.dsx-translation').length === 0]
+    ['no bilingual holder is added', document.querySelectorAll('.dsx-translation').length === 0],
+    ['hover title retains original text', document.querySelector('a').getAttribute('title') === "Original: Women's fashion"]
   );
 
   await app.command('off');
   checks.push(['restore returns original link text', document.querySelector('a').textContent === "Women's fashion"]);
   checks.push(['restore returns original button text', document.querySelector('button').textContent === 'New arrivals']);
+  checks.push(['restore removes generated hover title', document.querySelector('a').getAttribute('title') === null]);
 
   const failures = checks.filter(([, ok]) => !ok);
   checks.forEach(([name, ok]) => console.log((ok ? '  PASS  ' : '  FAIL  ') + name));

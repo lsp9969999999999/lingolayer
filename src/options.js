@@ -3,6 +3,7 @@
 const DEFAULTS = {
   apiKey: '', endpoint: 'https://api.deepseek.com', model: 'deepseek-v4-flash', thinkingMode: false,
   targetLang: 'Chinese (Simplified)', customTargetLang: '', autoMode: 'off', allowlist: [], blocklist: [], replaceModeSites: [],
+  siteGlossaries: [],
   style: 'dashed', showLoading: true, batchSize: 10, batchChars: 2000,
   concurrency: 5, onlyVisible: true, cacheEnabled: true, fontScale: 92, skipCode: true
 };
@@ -17,6 +18,22 @@ function linesToList(v) {
     .split(/[\n,]/)
     .map((s) => s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
     .filter(Boolean);
+}
+
+function parseGlossaries(value) {
+  return String(value || '').split('\n').map((line) => {
+    const [domainPart, rulePart] = line.split('|', 2);
+    const equals = (rulePart || '').indexOf('=');
+    if (equals < 1) return null;
+    const domain = domainPart.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    const source = rulePart.slice(0, equals).trim();
+    const target = rulePart.slice(equals + 1).trim();
+    return domain && source && target ? { domain, source, target } : null;
+  }).filter(Boolean);
+}
+
+function formatGlossaries(entries) {
+  return (entries || []).map((entry) => entry.domain + ' | ' + entry.source + ' = ' + entry.target).join('\n');
 }
 
 function normalizeTargetLang(value) {
@@ -47,6 +64,7 @@ async function load() {
   $('allowlist').value = (s.allowlist || []).join('\n');
   $('blocklist').value = (s.blocklist || []).join('\n');
   $('replaceModeSites').value = (s.replaceModeSites || []).join('\n');
+  $('siteGlossaries').value = formatGlossaries(s.siteGlossaries);
   syncRangeLabels();
   refreshCacheInfo();
 }
@@ -59,6 +77,7 @@ async function save() {
   patch.allowlist = linesToList($('allowlist').value);
   patch.blocklist = linesToList($('blocklist').value);
   patch.replaceModeSites = linesToList($('replaceModeSites').value);
+  patch.siteGlossaries = parseGlossaries($('siteGlossaries').value);
   if (patch.endpoint === '') patch.endpoint = DEFAULTS.endpoint;
   await chrome.storage.local.set(patch);
   flash($('saveResult'), 'Saved ✓', 'ok');

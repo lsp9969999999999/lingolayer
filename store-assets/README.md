@@ -6,6 +6,11 @@ These files are prepared for the Chrome Web Store draft listing:
 - `lingolayer-settings.png` — API, translation, and performance settings (1260 × 1233).
 - `lingolayer-popup.png` — compact toolbar popup (320 × 360).
 - `lingolayer-promo.png` — promotional tile/banner (1275 × 560).
+- `lingolayer-logo-300.png` — Edge extension logo (300 × 300).
+- `lingolayer-small-tile-440x280.png` — Edge small promotional tile (440 × 280).
+- `lingolayer-large-tile-1400x560.png` — Edge large promotional tile (1400 × 560).
+- `lingolayer-screenshot-demo-1280x800.png` — Edge screenshot (1280 × 800).
+- `lingolayer-screenshot-settings-1280x800.png` — Edge screenshot (1280 × 800).
 - `promo.html` — editable source for the promotional banner.
 
 Suggested screenshot captions:
